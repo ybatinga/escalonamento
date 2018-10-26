@@ -1,0 +1,4 @@
+1 1,2 NS NV
+2 3,4 SS SV
+3 5,6 SS NV
+4 8 SS SV

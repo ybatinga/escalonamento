@@ -1,0 +1,25 @@
+#https://www.cs.bu.edu/teaching/cpp/writing-makefiles/
+# Makefile for Writing Make Files Example
+
+# *****************************************************
+# Variables to control Makefile operation
+
+CXX = g++
+CXXFLAGS = -Wall -g
+
+# ****************************************************
+# Targets needed to bring the executable up to date
+
+escalona: escalona.o Esc.o EvTx.o Graph.o Saida.o Tx.o 
+	$(CXX) $(CXXFLAGS) -o escalona escalona.o Esc.o EvTx.o Graph.o Saida.o Tx.o 
+
+# The main.o target can be written more simply
+
+escalona.o: escalona.cpp Esc.h EvTx.h Graph.h Saida.h Tx.h 
+	$(CXX) $(CXXFLAGS) -c escalona.cpp
+
+Esc.o: Tx.h
+EvTx.o: EvTx.h
+Graph.o: Graph.h
+Saida.o: Saida.h
+Tx.o: Tx.h
