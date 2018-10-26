@@ -30,11 +30,14 @@ public:
     vector<int> GetIdList();
     void SetVisList(vector<Tx> visList);
     vector<Tx> GetVisList();
+    void SetSerial(bool Serial);
+    bool IsSerial() const;
 
 private:
     vector<Tx> escList; // transacoes de um escalonamento
     vector<Tx> visList; //  Lista com lista de permutacoes de escalonamentos para teste de equivalencia de visao
     vector<int> idList; // ids unicos de transacoes de escalonamento
+    bool isSerial; // serializavel se nao houver ciclo
 
 };
 

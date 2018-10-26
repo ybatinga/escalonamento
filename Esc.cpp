@@ -20,11 +20,12 @@ Esc::Esc() {
 }
 Esc::Esc(vector<int> idList) {
     this->idList = idList;
+    this->isSerial = false;
 }
-Esc::Esc(vector<Tx> escList, vector<int> idList){
-    this->escList = escList;
-    this->idList = idList;
-}
+//Esc::Esc(vector<Tx> escList, vector<int> idList){
+//    this->escList = escList;
+//    this->idList = idList;
+//}
 Esc::~Esc() {
 }
 
@@ -50,6 +51,14 @@ void Esc::SetVisList(vector<Tx> visList) {
 
 vector<Tx> Esc::GetVisList() {
     return visList;
+}
+
+void Esc::SetSerial(bool Serial) {
+    isSerial = Serial;
+}
+
+bool Esc::IsSerial() const {
+    return isSerial;
 }
 
 

@@ -49,3 +49,11 @@ string Tx::getAt() {
 void Tx::setAt(string at) {
 	this->at = at;
 }
+
+void Tx::setIdG(int idG) {
+    this->idG = idG;
+}
+
+int Tx::getIdG() const {
+    return idG;
+}

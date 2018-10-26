@@ -61,7 +61,7 @@ void salvaSaida(int index);
  * combinacao fatorial de transacoes de um escalonamento
  * Fonte algoritimo: https://stackoverflow.com/questions/32678349/all-permutations-c-with-vectorint-and-backtracking
 */
-void combinacaoFatorialEscalonamento(const std::vector<int>& v, vector<Tx> *escList);
+void combinacaoFatorialEscalonamento(const std::vector<int>& v, vector<Tx> escList);
 /*
  * gera permutacoes de escalonamento
  */
@@ -92,9 +92,9 @@ int main()
 		agrupaTransacoesEquivalencia(escListList.at(i).GetEscList());
 		testeEquivalenciaVisao(i, escListList.at(i).GetEscList());
 		salvaSaida(i);
-//		isSerial = false;
-//		isEV = false;
-//		evTxList.clear();
+		isSerial = false;
+		isEV = false;
+		evTxList.clear();
 	}
 	processaSaida();
 	return 0;
@@ -133,6 +133,7 @@ void triagemEscalonamento(){
                 for (unsigned l = 0; l < txList.size();l++){
                     Tx tx = txList.at(l);
                     if (tx.getId() == id){
+                        tx.setIdG(j+1);
                         escList.push_back(tx);
                     }
                 }
@@ -203,6 +204,7 @@ void triagemIdsEsc(){
                     it = find (idList.begin(), idList.end(), txi.getId());
                     if (it == idList.end()){
                         idList.push_back(txi.getId());
+                        idList.push_back(txj.getId());
                     }
                     k++;
                 }
@@ -243,7 +245,7 @@ void testeEquivalenciaVisao(unsigned m, vector<Tx> escList){
 
 	unsigned h, i, j, k, l;  // counter
 	bool isBreak = false;;
-        isEV = false;
+
 	// percorre itens de transacoes da lista
 	// inicia por "h = 1", pois "h = 0" representa a imagem de escalonamento S
 	for(h = 1; h < escListList.at(m).GetVisList().size(); h++) {
@@ -286,30 +288,30 @@ void testeEquivalenciaVisao(unsigned m, vector<Tx> escList){
 						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
 						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
 					}
-				}
-				if(
-					txi.getTc() < txj.getTc()
-						&&
-					txi.getId() != txj.getId()
-						&&
-					txi.getAt() == txj.getAt()
-						&&
-					txi.getOp() == "W"
-						&&
-					txj.getOp() == "R"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				}
+				}else
+//				if(
+//					txi.getTc() < txj.getTc()
+//						&&
+//					txi.getId() != txj.getId()
+//						&&
+//					txi.getAt() == txj.getAt()
+//						&&
+//					txi.getOp() == "W"
+//						&&
+//					txj.getOp() == "R"
+//				){
+//					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+//					EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
+//					std::vector<EvTx>::iterator it;
+//					it = std::find(evTxList.begin(), evTxList.end(), evTx);
+//					if(it != evTxList.end()){
+//						EvTx evTxSub = evTx;
+//						evTxSub.setE(true);
+//						// salva na lista as variaveis que entram na regra:
+//						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+//						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+//					}
+//				}
 				if (
 					txj.getOp() == "W"
 						&&
@@ -327,30 +329,31 @@ void testeEquivalenciaVisao(unsigned m, vector<Tx> escList){
 						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
 						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
 					}
-				} if(
-						txi.getTc() < txj.getTc()
-							&&
-						txi.getId() != txj.getId()
-							&&
-						txi.getAt() == txj.getAt()
-							&&
-						txi.getOp() == "W"
-							&&
-						txj.getOp() == "W"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
-
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				}
+				} 
+//                                if(
+//						txi.getTc() < txj.getTc()
+//							&&
+//						txi.getId() != txj.getId()
+//							&&
+//						txi.getAt() == txj.getAt()
+//							&&
+//						txi.getOp() == "W"
+//							&&
+//						txj.getOp() == "W"
+//				){
+//					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+//					EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
+//
+//					std::vector<EvTx>::iterator it;
+//					it = std::find(evTxList.begin(), evTxList.end(), evTx);
+//					if(it != evTxList.end()){
+//						EvTx evTxSub = evTx;
+//						evTxSub.setE(true);
+//						// salva na lista as variaveis que entram na regra:
+//						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+//						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+//					}
+//				}
 			}
 			l=0;
 			for (k = 0; k < evTxList.size(); k++){
@@ -383,7 +386,7 @@ void testeEquivalenciaVisao(unsigned m, vector<Tx> escList){
 
 void agrupaTransacoesEquivalencia(vector<Tx> escList){
 	unsigned i, j;  // counter
-        evTxList.clear();
+
 	// percorre itens de transacoes da lista
 	for(i = 0; i < escList.size(); i++) {
 
@@ -414,25 +417,25 @@ void agrupaTransacoesEquivalencia(vector<Tx> escList){
 				// salva na lista as variaveis que entram na regra:
 				// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
 				evTxList.push_back(evTx);
-			}
-			if(
-				txi.getTc() < txj.getTc()
-					&&
-				txi.getId() != txj.getId()
-					&&
-				txi.getAt() == txj.getAt()
-					&&
-				txi.getOp() == "W"
-					&&
-				txj.getOp() == "R"
-			){
-				string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-				EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
-				evTx.setE(false);
-				// salva na lista as variaveis que entram na regra:
-				// aresta Ti -> Tj para cada r(x) em Tj depois de w(x) em Ti
-				evTxList.push_back(evTx);
-			}
+			}else
+//			if(
+//				txi.getTc() < txj.getTc()
+//					&&
+//				txi.getId() != txj.getId()
+//					&&
+//				txi.getAt() == txj.getAt()
+//					&&
+//				txi.getOp() == "W"
+//					&&
+//				txj.getOp() == "R"
+//			){
+//				string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+//				EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
+//				evTx.setE(false);
+//				// salva na lista as variaveis que entram na regra:
+//				// aresta Ti -> Tj para cada r(x) em Tj depois de w(x) em Ti
+//				evTxList.push_back(evTx);
+//			}
 			if (
 				txj.getOp() == "W"
 					&&
@@ -445,24 +448,24 @@ void agrupaTransacoesEquivalencia(vector<Tx> escList){
 				// Se o operador w(y) em Tk é a ultima escrita de y em S, então w(y) em Tk deve ser a última escrita em S'
 				evTxList.push_back(evTx);
 			}
-			if(
-					txi.getTc() < txj.getTc()
-						&&
-					txi.getId() != txj.getId()
-						&&
-					txi.getAt() == txj.getAt()
-						&&
-					txi.getOp() == "W"
-						&&
-					txj.getOp() == "W"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
-					evTx.setE(false);
-					// salva na lista as variaveis que entram na regra:
-					// aresta Ti -> Tj para cada w(x) em Tj depois de w(x) em Ti
-					evTxList.push_back(evTx);
-			}
+//			if(
+//					txi.getTc() < txj.getTc()
+//						&&
+//					txi.getId() != txj.getId()
+//						&&
+//					txi.getAt() == txj.getAt()
+//						&&
+//					txi.getOp() == "W"
+//						&&
+//					txj.getOp() == "W"
+//				){
+//					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+//					EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
+//					evTx.setE(false);
+//					// salva na lista as variaveis que entram na regra:
+//					// aresta Ti -> Tj para cada w(x) em Tj depois de w(x) em Ti
+//					evTxList.push_back(evTx);
+//			}
 		}
 	}
 }
@@ -471,11 +474,11 @@ void agrupaTransacoesEquivalencia(vector<Tx> escList){
  * combinacao fatorial de transacoes de um escalonamento
  * Fonte algoritimo: https://stackoverflow.com/questions/32678349/all-permutations-c-with-vectorint-and-backtracking
 */
-void combinacaoFatorialEscalonamento(unsigned i, const std::vector<int>& v, vector<Tx> *escList)
+void combinacaoFatorialEscalonamento(unsigned i, const std::vector<int>& v, vector<Tx> escList)
 {
 	vector<Tx> txL;
     for (int e : v) {
-        for (Tx tx : *escList){
+        for (Tx tx : escList){
         	if (tx.getTc() == e){
         		txL.push_back(tx);
 				break;
@@ -490,15 +493,14 @@ void combinacaoFatorialEscalonamento(unsigned i, const std::vector<int>& v, vect
  * gera permutacoes de escalonamento
  */
 void permutaEscalonamento(unsigned i, vector<Tx> escList){
-    
-    // executa combinacao fatorial de transacoes de um escalonamento
-    std::vector<int> v;
-    for (Tx tx : escList){
-            v.push_back(tx.getTc());
-    }
-    do {
-            combinacaoFatorialEscalonamento(i, v, &escList);
-    } while (std::next_permutation(v.begin(), v.end()));
+	// executa combinacao fatorial de transacoes de um escalonamento
+	std::vector<int> v;
+	for (Tx tx : escList){
+		v.push_back(tx.getTc());
+	}
+	do {
+		combinacaoFatorialEscalonamento(i, v, escList);
+	} while (std::next_permutation(v.begin(), v.end()));
 }
 
 ///*
@@ -560,8 +562,7 @@ void permutaEscalonamento(unsigned i, vector<Tx> escList){
  * insere transacoes em grafo de acordo com regras de conflito de serializacao para verificacao de seriabilidade quanto ao conflito
  */
 void testeSeriabilidadeConflito(vector<Tx> escList){
-        isSerial = false;
-
+    
 	string s ; // recebe resultado se NS ou SS
 	unsigned i,j;  // counter
 //	for (vector<Tx> escList : escListList){
@@ -596,7 +597,7 @@ void testeSeriabilidadeConflito(vector<Tx> escList){
 						(txi.getOp() == "W" && txj.getOp() == "W")
 					){
 						// adiciona aresta em grafo
-						g.addEdge(txi.getId(), txj.getId());
+						g.addEdge(txi.getIdG(), txj.getIdG());
 					}
 				}
 			}

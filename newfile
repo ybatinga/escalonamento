@@ -17,15 +17,18 @@ using namespace std;
 #define NAO_VISAO "NV"
 #define SIM_VISAO "SV"
 #define READ_WRITE "RW" // regra de equivalencia de visao: - para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-#define WRITE "W" // regra de equivalencia de visao: - se o operador w(y) em Tk é a ultima escrita de y em S, então w(y) em Tk deve ser a última escrita em S'
 #define WRITE_WRITE "WW"
 #define WRITE_READ "WR"
+#define C "C" // commit
+#define A "A" // abort
+#define W "W" // write
+#define R "R" // read
+
 
 vector<Tx> txList; // lista de transacoes
 vector<Esc> escListList; //
 int cEsc; // conta quantidade de escalonamento
 vector<EvTx> evTxList; // lista de conjunto de operacoes que satisfazem regra de teste de equivalencia de visao:
-bool isSerial;
 bool isEV;
 vector<Saida> saidaList;
 
@@ -57,7 +60,7 @@ void salvaSaida();
  * combinacao fatorial de transacoes de um escalonamento
  * Fonte algoritimo: https://stackoverflow.com/questions/32678349/all-permutations-c-with-vectorint-and-backtracking
 */
-void combinacaoFatorialEscalonamento(const std::vector<int>& v, vector<Tx> escList);
+void combinacaoFatorialEscalonamento(const std::vector<int>& v, vector<Tx> *escList);
 /*
  * gera permutacoes de escalonamento
  */
@@ -70,193 +73,322 @@ void agrupaTransacoesEquivalencia();
  * salva resultados em arquivo de saida
  */
 void processaSaida();
-
+/*
+ * triagem de ids para lista de escalonamento
+ */
+void triagemIdsEsc();
+void ordenaEsc();
 int main()
 {
-	unsigned i;
-	criarArquivoEntrada();
+//	criarArquivoEntrada();
 	carregaArquivoEntrada();
-	triagemEscalonamento();
-        testeSeriabilidadeConflito();
+	triagemIdsEsc();
+        triagemEscalonamento();
+        ordenaEsc();
+	testeSeriabilidadeConflito();
         permutaEscalonamento();
         agrupaTransacoesEquivalencia();
         testeEquivalenciaVisao();
         salvaSaida();
-	for (i = 0; i < escListList.size(); i++){
-		
-		
-		
-		
-		
-//		isSerial = false;
-//		isEV = false;
-		evTxList.clear();
-	}
 	processaSaida();
 	return 0;
+}
+/*
+ * ordena escalonamento de acordo com ordem de chegada
+ */
+void ordenaEsc(){
+    for (unsigned k = 0; k < escListList.size(); k++){
+        vector<Tx> escList = escListList.at(k).GetEscList();
+        int temp;
+	for (unsigned j = 0; j < escList.size() - 1; ++j) {
+            Tx min = escList.at(j);
+            temp = j;
+            for (unsigned i = j+1; i < escList.size(); ++i) {
+                if (min.getTc() > escList.at(i).getTc()) {
+                    min = escList.at(i);  
+                    temp = i;
+                    }
+                }  
+		swap(escList.at(j), escList.at(temp));
+	}
+        escListList.at(k).SetEscList(escList);
+    }
+}
+/*
+ * triagem grupo de transacoes de escalonamento
+ */
+void triagemEscalonamento(){
+    for (unsigned i = 0; i < escListList.size(); i++){
+        Esc esc = escListList.at(i);
+        vector<Tx> escList;
+        for (unsigned j = 0; j < esc.GetIdList().size(); j++){
+//            for (int k = 0; k < esc.GetIdList().size(); k++){
+                int id = esc.GetIdList().at(j);
+                for (unsigned l = 0; l < txList.size();l++){
+                    Tx tx = txList.at(l);
+                    if (tx.getId() == id){
+                        escList.push_back(tx);
+                    }
+                }
+//            }
+            
+        }
+        escListList.at(i).SetEscList(escList);
+    }
+}
+/*
+ * triagem de ids para lista de escalonamento
+ */
+void triagemIdsEsc(){
+    string s ; // recebe resultado se NS ou SS
+    unsigned i,j;  // counter
+    vector<int> idList; // lista com identificadores unicos de transacoes de um grupo de escalonamento
+    
+    // percorre itens de transacoes da lista
+    for(i = 0; i < txList.size(); i++) {
+//        Graph* g = new Graph(txList.size());
+        // fixa o for em transacao i para teste de conflito de seriazabilidade
+        Tx txi = txList.at(i);
+        int k = 0; // contador para iterador de lista de ids
+        for(j = i; j < txList.size(); j++){
+            // fixa o for em transacao j para teste de conflito de seriazabilidade
+            Tx txj = txList.at(j);
+
+            // entra no if se tempo de chegada de transacoes
+            // estao em ordem crescente,
+            // o id das transacoes sao diferentes
+            // e os atributos sao os mesmos
+            if (txi.getTc() < txj.getTc()
+                        &&
+                txi.getId() != txj.getId()
+                        &&
+                txi.getAt() == txj.getAt()
+            ){
+                if (
+                    // aresta Ti -> Tj para cada w(x) em Tj depois de r(x) em Ti
+                    (txi.getOp() == R && txj.getOp() == W)
+                    ||
+                    // aresta Ti -> Tj para cada r(x) em Tj depois de w(x) em Ti
+                    (txi.getOp() == W && txj.getOp() == R)
+                    ||
+                    // aresta Ti -> Tj para cada w(x) em Tj depois de w(x) em Ti
+                    (txi.getOp() == W && txj.getOp() == W)
+                ){
+                    // fonte para algoritmo 'find': http://www.cplusplus.com/reference/algorithm/find/
+                    // usado para contar quantidade de vertices em escalonamento
+                    vector<int>::iterator it;
+                    it = find (idList.begin(), idList.end(), txi.getId());
+                    if (it == idList.end()){
+                        idList.push_back(txi.getId());
+                    }
+                    // adiciona aresta em grafo
+//                    g->addEdge(txi.getId(), txj.getId());
+                    k++;
+                }
+                if (
+                    // aresta Ti -> Tj para cada r(x) em Tj depois de r(x) em Ti
+                    // essa regra nao se aplica a regra de teste de seriabilidade,
+                    // se aplica somente para esta selecao de triagem de transacoes de escalonamento
+                    (txi.getOp() == R && txj.getOp() == R)
+                ){
+                    // fonte para algoritmo 'find': http://www.cplusplus.com/reference/algorithm/find/
+                    // usado para contar quantidade de vertices em escalonamento
+                    vector<int>::iterator it;
+                    it = find (idList.begin(), idList.end(), txi.getId());
+                    if (it == idList.end()){
+                        idList.push_back(txi.getId());
+                    }
+                    k++;
+                }
+            }
+            
+            // se houver transacao com commit,
+            // finaliza-se a triagem de agrupamento de transacoes de escalonamento
+            if (
+                (txi.getOp() == C)
+            ){
+//                i = j; // salva checkpoint para novo escalonamento
+                for (unsigned i = 0; i < idList.size(); i++){
+                    if (idList.at(0) == txi.getId()){
+                        Esc esc(idList);             
+//                        // aponta se existe ciclo no escalonamento
+//                        if(g->isCyclic()){
+//                                esc.SetSerial(false);
+//                        }else{
+//                                esc.SetSerial(true);
+//                        }
+//                        delete g;
+                        escListList.push_back(esc);
+                        idList.clear();
+                        
+                        
+                    }
+                }
+            }
+        }
+        
+    }
 }
 
 /*
  * insere transacoes em grafo de acordo com regras de equivalencia de visao para verificacao de equivalencia de visao
  */
 void testeEquivalenciaVisao(){
-    for (unsigned m = 0; m < escListList.size(); m++){
-        Esc esc = escListList.at(m);
+    for (unsigned n = 0; n < escListList.size(); n++){
+        Esc* esc = &escListList.at(n);
 	unsigned h, i, j, k, l;  // counter
 	bool isBreak = false;;
         isEV = false;
-
 	// percorre itens de transacoes da lista
 	// inicia por "h = 1", pois "h = 0" representa a imagem de escalonamento S
-	for(h = 1; h < esc.GetVisList().size(); h++) {
-		vector<Tx> txPList = esc.GetVisList(); // lista de transacoes permutadas
+	for(h = 1; h < esc->GetVisList().size(); h++) {
+            vector<Tx> txPList = esc->GetVisList(); // lista de transacoes permutadas
 //		vector<EvTx> evTxListAux = evTxList; // imagem auxiliar de
 
-		// percorre itens de transacoes da lista
-		for(i = 0; i < txPList.size(); i++) {
+            // percorre itens de transacoes da lista
+            for(i = 0; i < txPList.size(); i++) {
 
-			Tx txi = txPList.at(i);
+                Tx txi = txPList.at(i);
 
-			for(j = i+1; j < txPList.size(); j++){
-				// fixa o for em transacao j para teste de conflito de seriazabilidade
-				Tx txj = txPList.at(j);
+                for(j = i+1; j < txPList.size(); j++){
+                    // fixa o for em transacao j para teste de conflito de seriazabilidade
+                    Tx txj = txPList.at(j);
 
-				// entra no if se tempo de chegada de transacoes
-				// estao em ordem crescente,
-				// o id das transacoes sao diferentes
-				// e os atributos sao os mesmos
-				if (
-					txi.getTc() < txj.getTc()
-						&&
-					txi.getId() != txj.getId()
-						&&
-					txi.getAt() == txj.getAt()
-						&&
-					txi.getOp() == "R"
-						&&
-					txj.getOp() == "W"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), READ_WRITE, txi.getAt(), idu);
+                    // entra no if se tempo de chegada de transacoes
+                    // estao em ordem crescente,
+                    // o id das transacoes sao diferentes
+                    // e os atributos sao os mesmos
+                    if (
+                        txi.getTc() < txj.getTc()
+                                &&
+                        txi.getId() != txj.getId()
+                                &&
+                        txi.getAt() == txj.getAt()
+                                &&
+                        txi.getOp() == "R"
+                                &&
+                        txj.getOp() == "W"
+                    ){
+                        string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+                        EvTx evTx(txi.getId(), txj.getId(), READ_WRITE, txi.getAt(), idu);
 
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				}
-				if(
-					txi.getTc() < txj.getTc()
-						&&
-					txi.getId() != txj.getId()
-						&&
-					txi.getAt() == txj.getAt()
-						&&
-					txi.getOp() == "W"
-						&&
-					txj.getOp() == "R"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				}
-				if (
-					txj.getOp() == "W"
-						&&
-					j == esc.GetEscList().size()-1
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE, txi.getAt(), idu);
+                        std::vector<EvTx>::iterator it;
+                        it = std::find(evTxList.begin(), evTxList.end(), evTx);
+                        if(it != evTxList.end()){
+                            EvTx evTxSub = evTx;
+                            evTxSub.setE(true);
+                            // salva na lista as variaveis que entram na regra:
+                            // para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+                            replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+                        }
+                    }
+                    if(
+                        txi.getTc() < txj.getTc()
+                                &&
+                        txi.getId() != txj.getId()
+                                &&
+                        txi.getAt() == txj.getAt()
+                                &&
+                        txi.getOp() == "W"
+                                &&
+                        txj.getOp() == "R"
+                    ){
+                        string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+                        EvTx evTx(txi.getId(), txj.getId(), WRITE_READ, txi.getAt(), idu);
+                        std::vector<EvTx>::iterator it;
+                        it = std::find(evTxList.begin(), evTxList.end(), evTx);
+                        if(it != evTxList.end()){
+                            EvTx evTxSub = evTx;
+                            evTxSub.setE(true);
+                            // salva na lista as variaveis que entram na regra:
+                            // para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+                            replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+                        }
+                    }
+                    if (
+                        txj.getOp() == "W"
+                                &&
+                        j == esc->GetEscList().size()-1
+                    ){
+                        string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+                        EvTx evTx(txi.getId(), txj.getId(), W, txi.getAt(), idu);
 
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				} if(
-						txi.getTc() < txj.getTc()
-							&&
-						txi.getId() != txj.getId()
-							&&
-						txi.getAt() == txj.getAt()
-							&&
-						txi.getOp() == "W"
-							&&
-						txj.getOp() == "W"
-				){
-					string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-					EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
+                        std::vector<EvTx>::iterator it;
+                        it = std::find(evTxList.begin(), evTxList.end(), evTx);
+                        if(it != evTxList.end()){
+                            EvTx evTxSub = evTx;
+                            evTxSub.setE(true);
+                            // salva na lista as variaveis que entram na regra:
+                            // para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+                            replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+                        }
+                    } if(
+                            txi.getTc() < txj.getTc()
+                                    &&
+                            txi.getId() != txj.getId()
+                                    &&
+                            txi.getAt() == txj.getAt()
+                                    &&
+                            txi.getOp() == "W"
+                                    &&
+                            txj.getOp() == "W"
+                    ){
+                        string idu = to_string(txi.getId()).append(to_string(txj.getId()));
+                        EvTx evTx(txi.getId(), txj.getId(), WRITE_WRITE, txi.getAt(), idu);
 
-					std::vector<EvTx>::iterator it;
-					it = std::find(evTxList.begin(), evTxList.end(), evTx);
-					if(it != evTxList.end()){
-						EvTx evTxSub = evTx;
-						evTxSub.setE(true);
-						// salva na lista as variaveis que entram na regra:
-						// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-						replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-					}
-				}
-			}
-			l=0;
-			for (k = 0; k < evTxList.size(); k++){
-				if(evTxList.at(k).isE() == true){
-					l = l+1;
-				}
-			}
-			if (l == evTxList.size()){
-				isEV = true;
-				isBreak = true;
-			}
+                        std::vector<EvTx>::iterator it;
+                        it = std::find(evTxList.begin(), evTxList.end(), evTx);
+                        if(it != evTxList.end()){
+                            EvTx evTxSub = evTx;
+                            evTxSub.setE(true);
+                            // salva na lista as variaveis que entram na regra:
+                            // para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+                            replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+                        }
+                    }
+                }
+                l=0;
+                for (k = 0; k < evTxList.size(); k++){
+                    if(evTxList.at(k).isE() == true){
+                        l = l+1;
+                    }
+                }
+                if (l == evTxList.size()){
+                    isEV = true;
+                    isBreak = true;
+                }
 
-			for (EvTx evTx : evTxList){
-				std::vector<EvTx>::iterator it;
-				it = std::find(evTxList.begin(), evTxList.end(), evTx);
-				if(it != evTxList.end()){
-					EvTx evTxSub = evTx;
-					evTxSub.setE(false);
-					// salva na lista as variaveis que entram na regra:
-					// para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
-					replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
-				}
-			}
-			if (isBreak) break;
-		}
-		if (isBreak) break;
+                for (EvTx evTx : evTxList){
+                    std::vector<EvTx>::iterator it;
+                    it = std::find(evTxList.begin(), evTxList.end(), evTx);
+                    if(it != evTxList.end()){
+                        EvTx evTxSub = evTx;
+                        evTxSub.setE(false);
+                        // salva na lista as variaveis que entram na regra:
+                        // para cada r(x) de Ti, se o valor de x lido for escrito por w(x) de Tj, o mesmo deve permanecer para r(x) de Ti em S'
+                        replace (evTxList.begin(), evTxList.end(), evTx, evTxSub);
+                    }
+                }
+                if (isBreak) break;
+            }
+            if (isBreak) break;
 	}
-        
     }
 }
 
 void agrupaTransacoesEquivalencia(){
     for (unsigned l = 0; l < escListList.size(); l++){
-        Esc esc = escListList.at(l);
+        Esc* esc = &escListList.at(l);
 	unsigned i, j;  // counter
-
+        evTxList.clear();
 	// percorre itens de transacoes da lista
-	for(i = 0; i < esc.GetEscList().size(); i++) {
+	for(i = 0; i < esc->GetEscList().size(); i++) {
 
-            Tx txi = esc.GetEscList().at(i);
+            Tx txi = esc->GetEscList().at(i);
 
-            for(j = i+1; j < esc.GetEscList().size(); j++){
-                // fixa o for em transacao j para teste de conflito de seriazabilidade
-                Tx txj = esc.GetEscList().at(j);
+            for(j = i+1; j < esc->GetEscList().size(); j++){
+                    // fixa o for em transacao j para teste de conflito de seriazabilidade
+                Tx txj = esc->GetEscList().at(j);
 
                 // entra no if se tempo de chegada de transacoes
                 // estao em ordem crescente,
@@ -301,10 +433,10 @@ void agrupaTransacoesEquivalencia(){
                 if (
                     txj.getOp() == "W"
                             &&
-                    j == esc.GetEscList().size()-1
+                    j == esc->GetEscList().size()-1
                 ){
                     string idu = to_string(txi.getId()).append(to_string(txj.getId()));
-                    EvTx evTx(txi.getId(), txj.getId(), WRITE, txi.getAt(), idu);
+                    EvTx evTx(txi.getId(), txj.getId(), W, txi.getAt(), idu);
                     evTx.setE(false);
                     // salva na lista as variaveis que entram na regra:
                     // Se o operador w(y) em Tk é a ultima escrita de y em S, então w(y) em Tk deve ser a última escrita em S'
@@ -339,13 +471,13 @@ void agrupaTransacoesEquivalencia(){
 */
 void combinacaoFatorialEscalonamento(unsigned i, const std::vector<int>& v, vector<Tx> escList)
 {
-    vector<Tx> txL;
+	vector<Tx> txL;
     for (int e : v) {
         for (Tx tx : escList){
-            if (tx.getTc() == e){
-                txL.push_back(tx);
-                break;
-            }
+        	if (tx.getTc() == e){
+        		txL.push_back(tx);
+				break;
+        	}
         }
     }
 //    visList.push_back(txL);
@@ -357,101 +489,103 @@ void combinacaoFatorialEscalonamento(unsigned i, const std::vector<int>& v, vect
  */
 void permutaEscalonamento(){
     for (unsigned l = 0; l < escListList.size(); l++){
-        Esc esc = escListList.at(l);
-	// executa combinacao fatorial de transacoes de um escalonamento
-	std::vector<int> v;
-	for (Tx tx : esc.GetEscList()){
-		v.push_back(tx.getTc());
-	}
-	do {
-		combinacaoFatorialEscalonamento(l, v, esc.GetEscList());
-	} while (std::next_permutation(v.begin(), v.end()));
-    }
-}
+        Esc* esc = &escListList.at(l);
 
-/*
- * triagem grupo de transacoes de escalonamento
- */
-void triagemEscalonamento(){
-    unsigned i,j;  // counter
-    vector<Tx> escList; // lista de lista de grupo de transacoes de escalonamento
-    vector<int> idList; // lista com identificadores unicos de transacoes de um grupo de escalonamento
-    Tx txAux;
-
-    // percorre itens de transacoes da lista
-    for(j = 0; j < txList.size(); j++) {
-        int k = 0; // contador para iterador de lista de ids
-        // percorre itens de transacoes da lista
-        for(i = j; i < txList.size(); i++) {
-
-            // usa-se txAux para comparar item anterior com atual na iteracao
-            if (i != 0) {
-                txAux = txList.at(i-1);
-            }
-
-            // fixa o for em transacao i para teste de conflito de seriazabilidade
-            Tx txi = txList.at(i);
-
-            if (txi.getOp() != "C")
-            // adiciona transacao em escalonamento
-            escList.push_back(txi);
-
-            // fonte para algoritmo 'find': http://www.cplusplus.com/reference/algorithm/find/
-            // usado para contar quantidade de vertices em escalonamento
-            vector<int>::iterator it;
-            it = find (idList.begin(), idList.end(), txi.getId());
-            if (it == idList.end()){
-                idList.push_back(escList.at(k).getId());
-            }
-            k++;
-            // se duas transacoes seguidas tiverem commit,
-            // finaliza-se a triagem de agrupamento de transacoes de esconamento
-            if (
-                    (txAux.getId() != 0)
-                    &&
-                    (txAux.getOp() == "C")
-                    &&
-                    (txi.getOp() == "C")
-            ){
-                j = i; // salva checkpoint para novo escalonamento
-                break;
-            }
+        // executa combinacao fatorial de transacoes de um escalonamento
+        std::vector<int> v;
+        for (Tx tx : esc->GetEscList()){
+                v.push_back(tx.getTc());
         }
-        Esc esc(escList, idList);
-        escListList.push_back(esc);
-        escList.clear();
-        idList.clear();
+        do {
+                combinacaoFatorialEscalonamento(l, v, esc->GetEscList());
+        } while (std::next_permutation(v.begin(), v.end()));
     }
 }
+
+///*
+// * triagem grupo de transacoes de escalonamento
+// */
+//void triagemEscalonamento(){
+//    unsigned i,j;  // counter
+//    vector<Tx> escList; // lista de lista de grupo de transacoes de escalonamento
+//    vector<int> idList; // lista com identificadores unicos de transacoes de um grupo de escalonamento
+//    Tx txAux;
+//
+//    // percorre itens de transacoes da lista
+//    for(j = 0; j < txList.size(); j++) {
+//        int k = 0; // contador para iterador de lista de ids
+//        // percorre itens de transacoes da lista
+//        for(i = j; i < txList.size(); i++) {
+//
+//            // usa-se txAux para comparar item anterior com atual na iteracao
+//            if (i != 0) {
+//                txAux = txList.at(i-1);
+//            }
+//
+//            // fixa o for em transacao i para teste de conflito de seriazabilidade
+//            Tx txi = txList.at(i);
+//
+//            if (txi.getOp() != "C")
+//            // adiciona transacao em escalonamento
+//            escList.push_back(txi);
+//
+//            // fonte para algoritmo 'find': http://www.cplusplus.com/reference/algorithm/find/
+//            // usado para contar quantidade de vertices em escalonamento
+//            vector<int>::iterator it;
+//            it = find (idList.begin(), idList.end(), txi.getId());
+//            if (it == idList.end()){
+//                idList.push_back(escList.at(k).getId());
+//            }
+//            k++;
+//            // se duas transacoes seguidas tiverem commit,
+//            // finaliza-se a triagem de agrupamento de transacoes de esconamento
+//            if (
+//                    (txAux.getId() != 0)
+//                    &&
+//                    (txAux.getOp() == "C")
+//                    &&
+//                    (txi.getOp() == "C")
+//            ){
+//                j = i; // salva checkpoint para novo escalonamento
+//                break;
+//            }
+//        }
+//        Esc esc(escList, idList);
+//        escListList.push_back(esc);
+//        escList.clear();
+//        idList.clear();
+//    }
+//}
 
 /*
  * insere transacoes em grafo de acordo com regras de conflito de serializacao para verificacao de seriabilidade quanto ao conflito
  */
 void testeSeriabilidadeConflito(){
     for (unsigned l = 0; l < escListList.size(); l++){
-        Esc esc = escListList.at(l);
+        Esc* esc = &escListList.at(l);
+        Graph *g = new Graph(esc->GetEscList().size());
+	string s ; // recebe resultado se NS ou SS
 	unsigned i,j;  // counter
-        Graph g(esc.GetEscList().size());
-        isSerial = false;
         // percorre itens de transacoes da lista
-        for(i = 0; i < esc.GetEscList().size(); i++) {
-            // fixa o for em transacao i para teste de conflito de seriazabilidade
-            Tx txi = esc.GetEscList().at(i);
-            for(j = i; j < esc.GetEscList().size(); j++){
-                // fixa o for em transacao j para teste de conflito de seriazabilidade
-                Tx txj = esc.GetEscList().at(j);
+        for(i = 0; i < esc->GetEscList().size(); i++) {
+            
+                // fixa o for em transacao i para teste de conflito de seriazabilidade
+                Tx txi = esc->GetEscList().at(i);
+                for(j = i; j < esc->GetEscList().size(); j++){
+                    // fixa o for em transacao j para teste de conflito de seriazabilidade
+                    Tx txj = esc->GetEscList().at(j);
 
-                // entra no if se tempo de chegada de transacoes
-                // estao em ordem crescente,
-                // o id das transacoes sao diferentes
-                // e os atributos sao os mesmos
-                if (txi.getTc() < txj.getTc()
+                    // entra no if se tempo de chegada de transacoes
+                    // estao em ordem crescente,
+                    // o id das transacoes sao diferentes
+                    // e os atributos sao os mesmos
+                    if (txi.getTc() < txj.getTc()
                                 &&
-                    txi.getId() != txj.getId()
-                            &&
-                    txi.getAt() == txj.getAt()
-                ){
-                    if (
+                        txi.getId() != txj.getId()
+                                &&
+                        txi.getAt() == txj.getAt()
+                    ){
+                        if (
                             // aresta Ti -> Tj para cada w(x) em Tj depois de r(x) em Ti
                             (txi.getOp() == "R" && txj.getOp() == "W")
                             ||
@@ -460,42 +594,42 @@ void testeSeriabilidadeConflito(){
                             ||
                             // aresta Ti -> Tj para cada w(x) em Tj depois de w(x) em Ti
                             (txi.getOp() == "W" && txj.getOp() == "W")
-                    ){
+                        ){
                             // adiciona aresta em grafo
-                            g.addEdge(txi.getId(), txj.getId());
+                            g->addEdge(txi.getId(), txi.getId());
+                        }
                     }
                 }
-            }
+            
         }
 
         // aponta se existe ciclo no escalonamento
-        if(g.isCyclic()){
-                isSerial = false;
+        if(g->isCyclic()){
+                escListList.at(l).SetSerial(false);
         }else{
-                isSerial = true;
+                escListList.at(l).SetSerial(true);
         }
     }
-
 }
 
 /*
  * salva um resultado em lista para ser processado em arquivo de saida
  */
 void salvaSaida(){
-    for (unsigned l = 0; l < escListList.size(); l++){
-        Esc esc = escListList.at(l);
+    for (unsigned m = 0; m < escListList.size(); m++){
+        Esc* esc = &escListList.at(m);
 	unsigned i;
 
-	vector<int> m = esc.GetIdList();
+	vector<int> l = esc->GetIdList();
 	string lt; // lista de transacoes
-	for (i = 0; i < m.size(); i++){
-            if (i != 0)
-                lt.append(",");
+	for (i = 0; i < l.size(); i++){
+		if (i != 0)
+			lt.append(",");
 
-            lt.append(to_string(m.at(i)));
+		lt.append(to_string(l.at(i)));
 	}
 
-	Saida saida = Saida(l+1, lt.c_str(), isSerial? SIM_SERIAL : NAO_SERIAL, isEV? SIM_VISAO : NAO_VISAO);
+	Saida saida = Saida(m+1, lt.c_str(), esc->IsSerial()? SIM_SERIAL : NAO_SERIAL, isEV? SIM_VISAO : NAO_VISAO);
 	saidaList.push_back(saida);
     }
 }
@@ -577,4 +711,3 @@ void criarArquivoEntrada(){
 
 	fclose(fptr);
 }
-
